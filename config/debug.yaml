@@ -1,0 +1,28 @@
+#####################
+# model config    #
+#####################
+model: facebook/xglm-564M
+cache_dir: weight
+
+image_size: [384, 384]
+patch_size: [16, 16]
+num_channels: 3
+hidden_size: 1024
+
+
+#####################
+# data config     #
+#####################
+lang_dir: assets/font
+background_img_dir: assets/background
+dict_dir: assets/dict
+max_length: 160
+max_sentence_length: 30
+
+
+
+#####################
+# training config  #
+#####################
+train_samples: 10
+eval_samples: 1

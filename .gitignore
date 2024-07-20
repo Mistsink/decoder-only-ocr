@@ -1,0 +1,12 @@
+assets
+.DS_Store
+*.DS_Store
+data/
+output
+weight
+*.pyc
+*.pyo
+*.pyd
+*.swp
+*.log
+__pycache__
