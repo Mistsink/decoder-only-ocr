@@ -26,6 +26,9 @@ def build_model_peft(
 
     custom_layers = [
         "patch_embeddings",
+        "embed_tokens",
+        "embed_positions",
+        "lm_head"
     ]
     bnb_config = BitsAndBytesConfig(
         load_in_4bit=True,
@@ -52,9 +55,14 @@ def build_model_peft(
     model.config.sep_token_id = tokenizer.sep_token_id
 
     model = prepare_model_for_kbit_training(model)
+    param = model.model.embed_tokens.weight
+    param.data = param.data.to(torch.float32)
+
+    # param = model.model.embed_positions.weights
+    # param.data = param.data.to(torch.float32)
 
     if not inference:
-        lora_modules = "all-linear"
+        lora_modules = 'all-linear'
         peft_config = LoraConfig(
             task_type=TaskType.CAUSAL_LM,
             inference_mode=False,

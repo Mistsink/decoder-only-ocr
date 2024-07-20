@@ -12,3 +12,4 @@ weight
 __pycache__
 *.gz
 *.zip
+*.yaml

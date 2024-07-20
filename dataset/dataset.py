@@ -30,7 +30,6 @@ class GenDataset(Dataset):
 
         if self.transform is not None:
             img = self.transform(img)
-        self.tokenizer.decode('')
         assert type(label) != str
         input_ids = self.tokenizer(label.text, return_tensors="pt")[
             "input_ids"

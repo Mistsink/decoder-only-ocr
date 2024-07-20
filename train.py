@@ -55,7 +55,7 @@ if __name__ == "__main__":
         train_dataset=train_dataset,
         eval_dataset=eval_dataset,
         tokenizer=tokenizer,
-        compute_metrics=OCRMetric(tokenizer),
+        compute_metrics=OCRMetric(cfg, tokenizer),
     )
 
     trainer.train()
