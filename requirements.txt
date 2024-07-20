@@ -1,8 +1,13 @@
 torch
 torchvision
 transformers
-datasets
+evaluate
+jiwer
 numpy
+
+peft
+sentencepiece
+bitsandbytes
 
 opencv-python
 pillow

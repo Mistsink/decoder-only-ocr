@@ -10,24 +10,7 @@ from dataset.collator import collator_gened
 from dataset.custom_generator import SynthGenerator
 from trainer.metric import OCRMetric
 from trainer.trainer import CusTrainer
-
-
-def init_model(cfg: Config):
-    tokenizer: XGLMTokenizer = XGLMTokenizer.from_pretrained(
-        cfg.model, cache_dir=cfg.cache_dir
-    )
-    num_new_tokens = tokenizer.add_tokens(["\n", " "])
-
-    model = XGLMPatchForCausalLM.from_pretrained(
-        cfg.model, patch_config=cfg, cache_dir=cfg.cache_dir
-    )
-
-    # 调整模型的embedding层大小
-    if num_new_tokens > 0:
-        model.resize_token_embeddings(model.config.vocab_size + num_new_tokens)
-    model.config.sep_token_id = tokenizer.sep_token_id
-
-    return model, tokenizer
+from build_model import build_model_peft, build_model_vanilla
 
 
 def init_dataset(cfg: Config, tokenizer: XGLMTokenizer):
@@ -58,7 +41,7 @@ def init_dataset(cfg: Config, tokenizer: XGLMTokenizer):
 
 if __name__ == "__main__":
     cfg = cfg_from_yaml("config/debug.yaml")
-    model, tokenizer = init_model(cfg)
+    model, tokenizer = build_model_peft(cfg)
     train_dataset, eval_dataset = init_dataset(cfg, tokenizer)
 
     trainer = CusTrainer(

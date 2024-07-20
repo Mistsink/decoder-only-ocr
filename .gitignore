@@ -10,3 +10,5 @@ weight
 *.swp
 *.log
 __pycache__
+*.gz
+*.zip

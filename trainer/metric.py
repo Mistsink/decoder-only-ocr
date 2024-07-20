@@ -1,12 +1,9 @@
-import numpy as np
-from datasets import load_metric
+import evaluate
 
-# Load the metrics
-cer_metric = load_metric("cer")
-wer_metric = load_metric("wer")
+from config.config import Config
 
 
-def normalized_edit_distance(preds, labels):
+def normalized_edit_distance(wer_metric, preds, labels):
     total_distance = 0
     total_length = 0
     for pred, label in zip(preds, labels):
@@ -20,9 +17,9 @@ def normalized_edit_distance(preds, labels):
 
 
 class OCRMetric:
-    def __init__(self, tokenizer):
-        self.cer_metric = load_metric("cer")
-        self.wer_metric = load_metric("wer")
+    def __init__(self, cfg: Config, tokenizer):
+        self.cer_metric = evaluate.load("cer", cache_dir=cfg.cache_dir)
+        self.wer_metric = evaluate.load("wer", cache_dir=cfg.cache_dir)
         self.tokenizer = tokenizer
 
     def __call__(self, pred):
@@ -32,10 +29,12 @@ class OCRMetric:
         decoded_labels = self.tokenizer.batch_decode(labels, skip_special_tokens=True)
 
         # CER
-        cer = cer_metric.compute(predictions=decoded_preds, references=decoded_labels)
+        cer = self.cer_metric.compute(
+            predictions=decoded_preds, references=decoded_labels
+        )
 
         # NED (Normalized Edit Distance)
-        ned = normalized_edit_distance(decoded_preds, decoded_labels)
+        ned = normalized_edit_distance(self.wer_metric, decoded_preds, decoded_labels)
 
         # Accuracy
         correct = sum(p == l for p, l in zip(decoded_preds, decoded_labels))
