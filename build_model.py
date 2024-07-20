@@ -13,6 +13,16 @@ from peft import (
 
 from config.config import Config
 from model.xglm import XGLMPatchForCausalLM
+from model.qwen import Qwen2PatchForCausalLM
+
+
+def model_class(cfg: Config):
+    if "xglm" in cfg.model:
+        return XGLMPatchForCausalLM
+    elif "qwen2" in cfg.model:
+        return Qwen2PatchForCausalLM
+    else:
+        raise ValueError(f"Unsupported model: {cfg.model}")
 
 
 def build_model_peft(
@@ -24,12 +34,7 @@ def build_model_peft(
     tokenizer = AutoTokenizer.from_pretrained(cfg.model, cache_dir=cfg.cache_dir)
     num_new_tokens = tokenizer.add_tokens(["\n", " "])
 
-    custom_layers = [
-        "patch_embeddings",
-        "embed_tokens",
-        "embed_positions",
-        "lm_head"
-    ]
+    custom_layers = ["patch_embeddings", "embed_tokens", "embed_positions", "lm_head"]
     bnb_config = BitsAndBytesConfig(
         load_in_4bit=True,
         # load_in_8bit=True,
@@ -42,7 +47,8 @@ def build_model_peft(
         llm_int8_skip_modules=custom_layers,
     )
 
-    model = XGLMPatchForCausalLM.from_pretrained(
+    ModelClass = model_class(cfg)
+    model = ModelClass.from_pretrained(
         cfg.model,
         patch_config=cfg,
         cache_dir=cfg.cache_dir,
@@ -62,7 +68,7 @@ def build_model_peft(
     # param.data = param.data.to(torch.float32)
 
     if not inference:
-        lora_modules = 'all-linear'
+        lora_modules = "all-linear"
         peft_config = LoraConfig(
             task_type=TaskType.CAUSAL_LM,
             inference_mode=False,
@@ -88,7 +94,8 @@ def build_model_vanilla(cfg: Config) -> Tuple[nn.Module, AutoTokenizer]:
     tokenizer = AutoTokenizer.from_pretrained(cfg.model, cache_dir=cfg.cache_dir)
     num_new_tokens = tokenizer.add_tokens(["\n", " "])
 
-    model = XGLMPatchForCausalLM.from_pretrained(
+    ModelClass = model_class(cfg)
+    model = ModelClass.from_pretrained(
         cfg.model, patch_config=cfg, cache_dir=cfg.cache_dir
     )
 

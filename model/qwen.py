@@ -3,7 +3,7 @@ from typing import List, Optional, Tuple, Union
 
 import torch
 import torch.nn as nn
-from transformers import XGLMForCausalLM, XGLMModel, XGLMConfig
+from transformers import Qwen2ForCausalLM, Qwen2Tokenizer, Qwen2Model, Qwen2Config
 from transformers.modeling_attn_mask_utils import _prepare_4d_causal_attention_mask
 from transformers.modeling_outputs import (
     BaseModelOutputWithPastAndCrossAttentions,
@@ -32,22 +32,22 @@ def _prepare_4d_causal_attention_mask_retained(
         )
 
 
-from transformers.models.xglm import modeling_xglm
+from transformers.models.qwen2 import modeling_qwen2
 
-modeling_xglm._prepare_4d_causal_attention_mask = (
-    _prepare_4d_causal_attention_mask_retained
-)
+# modeling_qwen2._update_causal_mask = (
+#     _prepare_4d_causal_attention_mask_retained
+# )
 
 
-class XGLMPatchModel(XGLMModel):
+class Qwen2PatchModel(Qwen2Model):
 
     def __init__(
         self,
         patch_config,
-        xglm_config: XGLMConfig,
+        model_config: Qwen2Config,
         embed_tokens: Optional[nn.Embedding] = None,
     ):
-        super().__init__(xglm_config, embed_tokens)
+        super().__init__(model_config, embed_tokens)
 
         self.patch_embeddings = ViTPatchEmbeddings(patch_config)
 
@@ -113,13 +113,13 @@ class XGLMPatchModel(XGLMModel):
         )
 
 
-class XGLMPatchForCausalLM(XGLMForCausalLM):
+class Qwen2PatchForCausalLM(Qwen2ForCausalLM):
 
     def __init__(self, config, patch_config):
         super().__init__(config)
         self.cus_cfg = patch_config
 
-        self.model = XGLMPatchModel(patch_config, config)
+        self.model = Qwen2PatchModel(patch_config, config)
 
     @functools.cached_property
     def num_patches(self):
@@ -154,16 +154,26 @@ class XGLMPatchForCausalLM(XGLMForCausalLM):
 
         loss = None
         if labels is not None:
-            # shift labels and add a pad token to the end
-            shift_labels = labels.new_zeros(labels.shape)
-            shift_labels[:, :-1] = labels[:, 1:].clone()
-            # shift_labels[:, -1] = self.config.pad_token_id
-            shift_labels[:, -1] = -100
-
+            shift_logits = logits[..., :-1, :].contiguous()
+            shift_labels = labels[..., 1:].contiguous()
+            # Flatten the tokens
             loss_fct = nn.CrossEntropyLoss()
-            loss = loss_fct(
-                logits.view(-1, self.config.vocab_size), shift_labels.view(-1)
-            )
+            shift_logits = shift_logits.view(-1, self.config.vocab_size)
+            shift_labels = shift_labels.view(-1)
+            # Enable model parallelism
+            shift_labels = shift_labels.to(shift_logits.device)
+            loss = loss_fct(shift_logits, shift_labels)
+
+            # # shift labels and add a pad token to the end
+            # shift_labels = labels.new_zeros(labels.shape)
+            # shift_labels[:, :-1] = labels[:, 1:].clone()
+            # # shift_labels[:, -1] = self.config.pad_token_id
+            # shift_labels[:, -1] = -100
+
+            # loss_fct = nn.CrossEntropyLoss()
+            # loss = loss_fct(
+            #     logits.view(-1, self.config.vocab_size), shift_labels.view(-1)
+            # )
 
         return CausalLMOutputWithCrossAttentions(
             loss=loss,

@@ -13,3 +13,4 @@ __pycache__
 *.gz
 *.zip
 *.yaml
+*.ipynb
