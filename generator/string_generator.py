@@ -1,7 +1,9 @@
 import random as rnd
 import string
 from typing import List
+
 from .util import read_random_line
+from .db_cache import SentenceDB
 
 
 def create_strings_from_file(filename: str, count: int) -> List[str]:
@@ -24,13 +26,32 @@ def create_strings_from_file(filename: str, count: int) -> List[str]:
     return strings
 
 
+def create_strings_from_db(
+    length: int, allow_variable: bool, count: int, db: SentenceDB
+) -> List[str]:
+    assert isinstance(
+        db, SentenceDB
+    ), "create_strings_from_db must use class SentenceDB"
+
+    strings = []
+    for _ in range(0, count):
+        _id, current_string = db.get()
+        cur_len = rnd.randint(3, length) if allow_variable else length
+        start_idx = rnd.randint(0, len(current_string) - cur_len)
+
+        current_string = current_string[start_idx : start_idx + cur_len]
+
+        strings.append(current_string)
+    return strings
+
+
 def create_strings_from_dict_index(
     length: int, allow_variable: bool, count: int, file_path: str, index: List[int]
 ) -> List[str]:
     strings = []
     for _ in range(0, count):
         current_string = read_random_line(file_path, index)
-        cur_len = rnd.randint(1, length) if allow_variable else length
+        cur_len = rnd.randint(3, length) if allow_variable else length
         start_idx = rnd.randint(0, len(current_string) - cur_len)
 
         current_string = current_string[start_idx : start_idx + cur_len]

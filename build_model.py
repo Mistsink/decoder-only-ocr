@@ -17,9 +17,9 @@ from model.qwen import Qwen2PatchForCausalLM
 
 
 def model_class(cfg: Config):
-    if "xglm" in cfg.model:
+    if "xglm" in cfg.model.lower():
         return XGLMPatchForCausalLM
-    elif "qwen2" in cfg.model:
+    elif "qwen2" in cfg.model.lower():
         return Qwen2PatchForCausalLM
     else:
         raise ValueError(f"Unsupported model: {cfg.model}")
@@ -32,7 +32,9 @@ def build_model_peft(
     Use LoRA
     """
     tokenizer = AutoTokenizer.from_pretrained(cfg.model, cache_dir=cfg.cache_dir)
-    num_new_tokens = tokenizer.add_tokens(["\n", " "])
+    num_new_tokens = 0
+    if tokenizer.sep_token_id is None:
+        num_new_tokens = tokenizer.add_special_tokens({"sep_token": "<|sep|>"})
 
     custom_layers = ["patch_embeddings", "embed_tokens", "embed_positions", "lm_head"]
     bnb_config = BitsAndBytesConfig(
@@ -48,19 +50,28 @@ def build_model_peft(
     )
 
     ModelClass = model_class(cfg)
+    from accelerate import PartialState
+
     model = ModelClass.from_pretrained(
         cfg.model,
         patch_config=cfg,
         cache_dir=cfg.cache_dir,
         quantization_config=bnb_config,
+        # device_map={'':torch.cuda.current_device()}
+        low_cpu_mem_usage=True,
+        device_map={"": PartialState().process_index},
     )
 
     # 调整模型的embedding层大小
-    if num_new_tokens > 0:
-        model.resize_token_embeddings(model.config.vocab_size + num_new_tokens)
+    if num_new_tokens > 0 and len(tokenizer) > model.config.vocab_size:
+        model.resize_token_embeddings(len(tokenizer))
     model.config.sep_token_id = tokenizer.sep_token_id
 
-    model = prepare_model_for_kbit_training(model)
+    model = prepare_model_for_kbit_training(
+        model,
+        use_gradient_checkpointing=True,
+        gradient_checkpointing_kwargs={"use_reentrant": False},
+    )
     param = model.model.embed_tokens.weight
     param.data = param.data.to(torch.float32)
 

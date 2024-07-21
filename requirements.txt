@@ -8,6 +8,7 @@ numpy
 peft
 sentencepiece
 bitsandbytes
+accelerate
 
 opencv-python
 pillow
@@ -15,3 +16,4 @@ fontTools
 
 pyyaml
 protobuf
+duckdb

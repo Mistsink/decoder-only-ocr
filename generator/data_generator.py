@@ -30,7 +30,7 @@ class FakeTextDataGenerator(object):
         index: int,
         text: str,
         sentences: List[List[Tuple[str, str, str]]],
-        out_dir: str,
+        out_dir: str | None,
         size: int,
         extension: str,
         skewing_angle: int,

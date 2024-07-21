@@ -6,19 +6,27 @@ from PIL import Image, ImageFont
 from .font_support import has_char
 
 from .data_generator import FakeTextDataGenerator
-from .string_generator import create_strings_from_dict, create_strings_from_dict_index
+from .string_generator import (
+    create_strings_from_db,
+    create_strings_from_dict,
+    create_strings_from_dict_index,
+)
 from .util import create_line_index, find_all_newlines, load_fonts, load_dict
+from .db_cache import SentenceDB
 
 
 class DataGenerator:
 
     lang_fonts: Dict[str, List[str]]  # lang: [font1, font2, ...]
-    lang_dict: Dict[str, List[str]]  # lang: [word1, word2, ...]
+    lang_dict: Dict[
+        str, Tuple[str, List[int | SentenceDB]]
+    ]  # lang: (file_path, idx_list | db)
 
     def __init__(
         self,
         lang_dir: str,
         dict_dir: str,
+        db_dir: str,
         max_length: int,
         background_img_dir: str = None,
         max_sentence_len: int = 30,
@@ -28,7 +36,10 @@ class DataGenerator:
         dict_dir: lang1.txt, lang2.txt, ...
         """
         self._load_fonts(lang_dir)
-        self._load_dict(dict_dir)
+        if dict_dir:
+            self._load_dict(dict_dir)
+        if db_dir:
+            self._load_db(db_dir)
         self.max_length = max_length
         self.max_sentence_len = max_sentence_len
         self.background_img_dir = background_img_dir
@@ -40,6 +51,22 @@ class DataGenerator:
                 continue
             self.lang_fonts[lang] = load_fonts(os.path.join(lang_dir, lang))
 
+    def _load_db(self, db_dir: str) -> None:
+        self.lang_dict: Dict[str, Tuple[str, SentenceDB]] = {}
+        for db_file in os.listdir(db_dir):
+            if db_file.startswith("merge") or db_file.startswith("."):
+                continue
+            if not db_file.endswith(".duckdb"):
+                continue
+
+            lang = db_file.split(".")[0]
+            if lang not in self.lang_fonts:
+                continue
+
+            file_path = os.path.join(db_dir, db_file)
+            self.lang_dict[lang] = (file_path, SentenceDB(file_path, read_only=True))
+        print(f"Loaded {len(self.lang_dict)} languages.")
+
     def _load_dict(self, dict_dir: str) -> None:
         """
         dict_dir: lang1.txt, lang2.txt, ...
@@ -49,14 +76,16 @@ class DataGenerator:
         for dict_file in os.listdir(dict_dir):
             if dict_file.startswith("merge") or dict_file.startswith("."):
                 continue
+            if not dict_file.endswith(".txt"):
+                continue
             lang = dict_file.split(".")[0]
             if lang not in self.lang_fonts:
                 continue
 
             file_path = os.path.join(dict_dir, dict_file)
-            print(f'Loading {file_path}...')
+            print(f"Loading {file_path}...")
             self.lang_dict[lang] = (file_path, create_line_index(file_path))
-            print(f'Loaded {file_path}.')
+            print(f"Loaded {file_path}.")
         print(f"Loaded {len(self.lang_dict)} languages.")
 
     def generate(self, verbose: bool = False) -> Tuple[Image.Image, Image.Image, str]:
@@ -102,18 +131,79 @@ class DataGenerator:
         MAX_NUM_LINE_BREAK = 4
         MAX_NUM_SPACE = 4 * 8
         text_max_length = self.max_length - MAX_NUM_LINE_BREAK - MAX_NUM_SPACE
+        target_text = ""
+        while len(target_text.strip()) <= 0:
+            langs, sentences, target_text = self.generate_sentences(
+                langs, lang_num, fonts, image_fonts, text_max_length
+            )
+
+        # direction
+        # langs 只有汉子、日文，80%是竖排，20%是横排、其他语言都是横排
+        only_cjk = all([lang in ["cn", "zh", "zh_cn", "zh_tw", "ja"] for lang in langs])
+        orientation = 0  # 0 -> horizontal, 1 -> vertical
+        if only_cjk:
+            orientation = 1 if random.random() < 0.8 else 0
+
+        # generate image
+        image, mask = FakeTextDataGenerator.generate(
+            index=0,
+            text=target_text,
+            sentences=sentences,
+            out_dir=None,
+            size=font_size,
+            extension="jpg",
+            skewing_angle=angle,
+            random_skew=False,
+            blur=0,
+            random_blur=True,
+            background_type=background_type,  # 0 -> 高斯模糊背景, 1 -> 纯色背景，2 -> 准晶体背景, x -> 自定义背景,
+            distorsion_type=0,
+            distorsion_orientation=0,
+            name_format=0,
+            width=image_width,
+            alignment=1,
+            text_color=text_color,
+            orientation=orientation,
+            space_width=1,
+            character_spacing=0,
+            margins=(5, 5, 5, 5),
+            fit=False,
+            output_mask=True,
+            word_split=False,
+            image_dir=self.background_img_dir,
+            stroke_width=stroke_width,
+            stroke_fill=stroke_fill,
+            image_mode="RGB",
+        )
+        if verbose and image and mask:
+            if not os.path.exists("data/tmp"):
+                os.makedirs("data/tmp")
+            image.save("data/tmp/text.png")
+            mask.save("data/tmp/mask.png")
+
+        return image, mask, target_text
+
+    def generate_sentences(self, langs, lang_num, fonts, image_fonts, text_max_length):
         texts: List[List[str]] = []
         for lang in langs:
             # + 1 是为了尽量让文字短一点，让多语言的文字更多
             max_length = text_max_length // (lang_num + 1)
             count = random.choice([1, 2])
-            _texts = create_strings_from_dict_index(
-                max_length,
-                allow_variable=True,
-                count=count,
-                file_path=self.lang_dict[lang][0],
-                index=self.lang_dict[lang][1],
-            )
+            if isinstance(self.lang_dict[lang][1], SentenceDB):
+                _texts = create_strings_from_db(
+                    max_length,
+                    allow_variable=True,
+                    count=count,
+                    db=self.lang_dict[lang][1],
+                )
+            else:
+                _texts = create_strings_from_dict_index(
+                    max_length,
+                    allow_variable=True,
+                    count=count,
+                    file_path=self.lang_dict[lang][0],
+                    index=self.lang_dict[lang][1],
+                )
             texts.append(_texts)
 
         # refine texts
@@ -201,52 +291,7 @@ class DataGenerator:
         target_text = self.refine_text(target_text, rm_pre_last_space=True)
         # 将全角空格替换成正常的空格
         target_text = target_text.replace("\u3000", " ")
-
-        # direction
-        # langs 只有汉子、日文，80%是竖排，20%是横排、其他语言都是横排
-        only_cjk = all([lang in ["cn", "zh", "zh_cn", "zh_tw", "ja"] for lang in langs])
-        orientation = 0  # 0 -> horizontal, 1 -> vertical
-        if only_cjk:
-            orientation = 1 if random.random() < 0.8 else 0
-
-        # generate image
-        image, mask = FakeTextDataGenerator.generate(
-            index=0,
-            text=target_text,
-            sentences=sentences,
-            out_dir=None,
-            size=font_size,
-            extension="jpg",
-            skewing_angle=angle,
-            random_skew=False,
-            blur=0,
-            random_blur=True,
-            background_type=background_type,  # 0 -> 高斯模糊背景, 1 -> 纯色背景，2 -> 准晶体背景, x -> 自定义背景,
-            distorsion_type=0,
-            distorsion_orientation=0,
-            name_format=0,
-            width=image_width,
-            alignment=1,
-            text_color=text_color,
-            orientation=orientation,
-            space_width=1,
-            character_spacing=0,
-            margins=(5, 5, 5, 5),
-            fit=False,
-            output_mask=True,
-            word_split=False,
-            image_dir=self.background_img_dir,
-            stroke_width=stroke_width,
-            stroke_fill=stroke_fill,
-            image_mode="RGB",
-        )
-        if verbose and image and mask:
-            if not os.path.exists("data/tmp"):
-                os.makedirs("data/tmp")
-            image.save("data/tmp/text.png")
-            mask.save("data/tmp/mask.png")
-
-        return image, mask, target_text
+        return langs, sentences, target_text
 
     @staticmethod
     def insert_str_into_text_list(

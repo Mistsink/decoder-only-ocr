@@ -1,13 +1,13 @@
 #####################
 # model config    #
 #####################
-model: facebook/xglm-564M
-cache_dir: weight
+model: Qwen/Qwen2-0.5B
+cache_dir: /data1/hy/models
 
 image_size: [384, 384]
 patch_size: [16, 16]
 num_channels: 3
-hidden_size: 1024
+hidden_size: 896
 
 
 #####################
@@ -15,7 +15,7 @@ hidden_size: 1024
 #####################
 lang_dir: assets/font
 background_img_dir: assets/background
-dict_dir: assets/dict
+db_dir: assets/debug_dict
 max_length: 160
 max_sentence_length: 30
 
@@ -25,4 +25,4 @@ max_sentence_length: 30
 # training config  #
 #####################
 train_samples: 10
-eval_samples: 1
+eval_samples: 2

@@ -146,6 +146,7 @@ class SynthGenerator(TextLabelGenerator):
         self,
         lang_dir: str,
         dict_dir: str,
+        db_dir: str,
         background_img_dir: str,
         max_total_length: int = 128,
         max_sentence_len: int = 16,
@@ -154,6 +155,7 @@ class SynthGenerator(TextLabelGenerator):
         self.data_gen = DataGenerator(
             lang_dir=lang_dir,
             dict_dir=dict_dir,
+            db_dir=db_dir,
             background_img_dir=background_img_dir,
             max_length=max_total_length,
             max_sentence_len=max_sentence_len,

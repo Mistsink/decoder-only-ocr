@@ -9,7 +9,7 @@ from transformers.modeling_outputs import (
     BaseModelOutputWithPastAndCrossAttentions,
     CausalLMOutputWithCrossAttentions,
 )
-from transformers.models.vit.modeling_vit import ViTPatchEmbeddings
+from .common import ViTPatchEmbeddings
 
 
 # monkey patching

@@ -1,5 +1,5 @@
 import functools
-from typing import List, Optional, Tuple, Union
+from typing import Any, List, Optional, Tuple, Union
 
 import torch
 import torch.nn as nn
@@ -9,7 +9,7 @@ from transformers.modeling_outputs import (
     BaseModelOutputWithPastAndCrossAttentions,
     CausalLMOutputWithCrossAttentions,
 )
-from transformers.models.vit.modeling_vit import ViTPatchEmbeddings
+from .common import ViTPatchEmbeddings
 
 
 # monkey patching
@@ -44,10 +44,9 @@ class Qwen2PatchModel(Qwen2Model):
     def __init__(
         self,
         patch_config,
-        model_config: Qwen2Config,
-        embed_tokens: Optional[nn.Embedding] = None,
+        config: Qwen2Config,
     ):
-        super().__init__(model_config, embed_tokens)
+        super().__init__(config)
 
         self.patch_embeddings = ViTPatchEmbeddings(patch_config)
 
@@ -59,7 +58,7 @@ class Qwen2PatchModel(Qwen2Model):
         use_cache: Optional[bool] = None,
         past_key_values: Optional[List[torch.FloatTensor]] = None,
     ) -> BaseModelOutputWithPastAndCrossAttentions:
-        if past_key_values is not None:
+        if past_key_values is not None and past_key_values.get_seq_length() > 0:
             return super().forward(
                 input_ids=input_ids,
                 position_ids=position_ids,
@@ -83,7 +82,7 @@ class Qwen2PatchModel(Qwen2Model):
         # patch all 1s, token like causal mask
         input_shape = embeddings.size()[:-1]  # dim: [batch_size, seq_len]
         past_key_values_length = (
-            past_key_values[0][0].shape[2] if past_key_values is not None else 0
+            past_key_values.get_seq_length() if past_key_values is not None else 0
         )
         attention_mask = _prepare_4d_causal_attention_mask(
             None, input_shape, token_embeddings, past_key_values_length
@@ -120,10 +119,7 @@ class Qwen2PatchForCausalLM(Qwen2ForCausalLM):
         self.cus_cfg = patch_config
 
         self.model = Qwen2PatchModel(patch_config, config)
-
-    @functools.cached_property
-    def num_patches(self):
-        return self.model.patch_embeddings.num_patches
+        self.num_patches = self.model.patch_embeddings.num_patches
 
     def forward(
         self,
@@ -184,17 +180,24 @@ class Qwen2PatchForCausalLM(Qwen2ForCausalLM):
 
     def prepare_inputs_for_generation(
         self,
-        input_ids: torch.Tensor,
-        past_key_values=None,
-        attention_mask=None,
-        use_cache=None,
-        **kwargs,
+        # input_ids: torch.Tensor,
+        # past_key_values=None,
+        # attention_mask=None,
+        # use_cache=None,
+        # **kwargs,
+        input_ids: Any,
+        past_key_values: Any | None = None,
+        attention_mask: Any | None = None,
+        inputs_embeds: Any | None = None,
+        cache_position: Any | None = None,
+        use_cache: bool = True,
+        **kwargs: Any
     ):
         # input_ids reset to <SEP>
         input_ids[:, 0] = self.config.sep_token_id
 
         model_inputs_dict = super().prepare_inputs_for_generation(
-            input_ids, past_key_values, attention_mask, use_cache, **kwargs
+            input_ids, past_key_values, attention_mask, inputs_embeds, cache_position, use_cache, **kwargs
         )
         del model_inputs_dict["attention_mask"]
         model_inputs_dict["pixel_values"] = kwargs.get("pixel_values")

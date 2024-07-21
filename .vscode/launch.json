@@ -10,7 +10,22 @@
             "request": "launch",
             "program": "train.py",
             "console": "integratedTerminal",
-            "justMyCode": false
+            "justMyCode": true
+        },
+        {
+            "name": "Accelerate",
+            "type": "python",
+            "request": "launch",
+            "module": "accelerate.commands.launch",
+            "args": [
+                "--config_file", "config/ac.yaml",
+                "train.py"
+            ],
+            "env": {
+                "CUDA_VISIBLE_DEVICES": "0,1,2,3"
+            },
+            "justMyCode": false,
+            "console": "integratedTerminal"
         }
     ]
 }

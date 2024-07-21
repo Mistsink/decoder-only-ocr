@@ -1,0 +1,1 @@
+CUDA_VISIBLE_DEVICES=0,1,2,3 accelerate launch --config_file config/ac.yaml train.py > log/qwen_384x384_16x16.log 2>&1 &

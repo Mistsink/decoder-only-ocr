@@ -33,9 +33,17 @@ class GenDataset(Dataset):
         assert type(label) != str
         input_ids = self.tokenizer(label.text, return_tensors="pt")[
             "input_ids"
-        ].squeeze()  # dim: (seq_len,)
+        ].squeeze(0)  # dim: (seq_len,)
         # add EOS
-        input_ids = torch.cat((input_ids, torch.tensor([self.tokenizer.eos_token_id])))
+        try:
+            input_ids = torch.cat(
+                (input_ids, torch.tensor([self.tokenizer.eos_token_id]))
+            )
+        except Exception as e:
+            print(f"e: {e}")
+            _i = self.tokenizer(label.text, return_tensors="pt")["input_ids"]
+            print(f"text: {label.text}\ninput_ids: {input_ids}\ntokened ids: {_i}")
+            exit(0)
 
         color = torch.tensor(label.color, dtype=torch.int)
         stroke_color = torch.tensor(label.stroke_color, dtype=torch.int)
